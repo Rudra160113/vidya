@@ -1,0 +1,29 @@
+# File location: docker-compose.yml
+
+version: '3.8'
+
+services:
+  vidya_app:
+    build: .
+    ports:
+      - "5000:5000"
+      - "8765:8765"
+    volumes:
+      - .:/app
+    depends_on:
+      - vidya_db
+    environment:
+      - VIDYA_DB_HOST=vidya_db
+      - VIDYA_DB_NAME=/app/vidya.sqlite
+      # VIDYA_API_KEY could also be added here for local dev
+    command: python vidya/main.py
+
+  vidya_db:
+    image: nouchka/sqlite3-server
+    # For a real project, you might use a more robust database like Postgres
+    # image: postgres:13
+    volumes:
+      - ./data/vidya.sqlite:/data/vidya.sqlite
+      - ./data/migrations:/data/migrations
+    ports:
+      - "8080:8080"
