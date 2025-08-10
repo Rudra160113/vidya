@@ -3,6 +3,10 @@
 import logging
 import asyncio
 import os
+from flask import Flask, send_from_directory
+from threading import Thread
+
+# Import all other necessary Vidya AI components
 from vidya.core.dependency_injector import DependencyInjector
 from vidya.core.command_router import CommandRouter
 from vidya.core.event_dispatcher import EventDispatcher
@@ -19,17 +23,21 @@ from vidya.utils.logger_config import setup_logging
 from vidya.audio.speech_to_text_google import SpeechToTextGoogle
 from vidya.audio.text_to_speech_google import TextToSpeechGoogle
 
+# --- Flask App Configuration ---
+app = Flask(__name__, static_folder="frontend", static_url_path="")
+
+@app.route("/")
+def serve_index():
+    """Serve the main index.html file."""
+    return send_from_directory(app.static_folder, "index.html")
+
+# --- Vidya AI Initialization (unchanged) ---
 def init_app():
-    """Initializes all core application components and services."""
-    
-    # 1. Setup logging
+    # ... (the rest of the init_app function remains the same as before)
     setup_logging()
     logging.info("Starting Vidya AI application...")
     
-    # 2. Setup Dependency Injector
     injector = DependencyInjector()
-    
-    # 3. Register Core Components
     config_manager = ConfigurationManager()
     injector.register(ConfigurationManager, config_manager)
     
@@ -49,19 +57,16 @@ def init_app():
     dispatcher = EventDispatcher()
     injector.register(EventDispatcher, dispatcher)
     
-    # 4. Register Services
     injector.register(GeminiService, GeminiService)
     injector.register(WebSearchService, WebSearchService)
     injector.register(SupabaseService, SupabaseService)
     injector.register(SpeechToTextGoogle, SpeechToTextGoogle)
     injector.register(TextToSpeechGoogle, TextToSpeechGoogle)
     
-    # 5. Load Plugins
     plugin_manager = PluginManager(injector, router)
     plugin_manager.load_plugins()
     
     logging.info("All application components initialized and services registered.")
-    
     return injector, message_queue, router, dispatcher
 
 async def main_loop(websocket_server, message_queue, router, dispatcher):
@@ -69,37 +74,37 @@ async def main_loop(websocket_server, message_queue, router, dispatcher):
     The main asynchronous loop for the application.
     """
     logging.info("Starting application main loop.")
-    
     await websocket_server.start_server()
-    
-    # You would also have an event processing loop here
-    # while True:
-    #     try:
-    #         message = message_queue.get_message(timeout=1)
-    #         if message:
-    #             # Process the message here
-    #             ...
-    #         await asyncio.sleep(0.1)
-    #     except asyncio.CancelledError:
-    #         break
+
+def run_websocket_server(loop, server):
+    """Function to run the asyncio loop in a separate thread."""
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(server.start_server())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.close()
 
 def main():
     """The main entry point of the application."""
     injector, message_queue, router, dispatcher = init_app()
     
-    # Get configuration for the WebSocket server
     host = injector.get(ConfigurationManager).get("websocket_host", "0.0.0.0")
-    port = injector.get(ConfigurationManager).get("websocket_port", 8765)
+    websocket_port = injector.get(ConfigurationManager).get("websocket_port", 8765)
+    flask_port = injector.get(ConfigurationManager).get("flask_port", 5000) # Assuming a Flask port in config
     
-    websocket_server = WebSocketServer(message_queue, host, port)
+    websocket_server = WebSocketServer(message_queue, host, websocket_port)
     
-    # Run the main asynchronous loop
-    try:
-        asyncio.run(main_loop(websocket_server, message_queue, router, dispatcher))
-    except KeyboardInterrupt:
-        logging.info("Application shut down by user.")
-    except Exception as e:
-        logging.critical(f"An unrecoverable error occurred: {e}", exc_info=True)
+    # Start the WebSocket server in a separate thread
+    ws_loop = asyncio.new_event_loop()
+    ws_thread = Thread(target=run_websocket_server, args=(ws_loop, websocket_server), daemon=True)
+    ws_thread.start()
+    
+    # Start the Flask web server in the main thread
+    logging.info(f"Flask web server listening on http://{host}:{flask_port}")
+    app.run(host=host, port=flask_port, debug=True, use_reloader=False)
 
 if __name__ == "__main__":
     main()
+    
