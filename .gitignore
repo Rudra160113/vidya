@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+.env
+
+# Virtual environment
+.venv/
+env/
+
+# IDE files
+.idea/
+.vscode/
+
+# OS-generated files
+.DS_Store
+.localized
+Thumbs.db
+
+# Log files
+*.log
+
+# Database files
+*.sqlite
+*.sqlite3
+
+# Test files
+.pytest_cache/
+
+# Docker
+.dockerignore
+
+# Configuration files
+# Sensitive configuration should not be committed to the repo
+# Example: vidya/config/config.json
